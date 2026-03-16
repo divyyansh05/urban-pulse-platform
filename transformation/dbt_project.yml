@@ -1,0 +1,36 @@
+name: 'urban_pulse'
+version: '1.0.0'
+config-version: 2
+
+profile: 'urban_pulse'
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  urban_pulse:
+    staging:
+      +materialized: view
+      +dataset: staging
+    intermediate:
+      +materialized: table
+      +dataset: intermediate
+    marts:
+      +materialized: table
+      +dataset: marts
+      +partition_by:
+        field: event_date
+        data_type: date
+      +cluster_by: ["borough", "domain"]
+
+snapshots:
+  urban_pulse:
+    +target_schema: snapshots
+    +strategy: timestamp
+    +updated_at: updated_at
