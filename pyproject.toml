@@ -1,0 +1,23 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501", "E402"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+"scripts/*" = ["E402", "E741"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.sqlfluff.core]
+dialect = "bigquery"
+templater = "dbt"
+sql_file_exts = ".sql"
+
+[tool.sqlfluff.templater.dbt]
+project_dir = "transformation"
