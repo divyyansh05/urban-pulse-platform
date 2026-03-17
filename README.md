@@ -280,7 +280,7 @@ urban-pulse-platform/
 |-------|-------------|--------|
 | Pre-phase | Repo setup, cloud accounts, tooling | ✅ Done |
 | Phase 0 | API exploration, data model, architecture | ✅ Done |
-| Phase 1 | Batch ingestion — 311, Crime, Weather, AQ | 🔄 In Progress |
+| Phase 1 | Batch ingestion — 311, Crime, Weather, AQ | ✅ Done |
 | Phase 2 | Warehouse + dbt transformation layer | ⏳ Pending |
 | Phase 3 | Streaming ingestion — TfL live feed | ⏳ Pending |
 | Phase 4 | Orchestration + pipeline monitoring | ⏳ Pending |

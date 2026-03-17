@@ -12,7 +12,7 @@ ignore = ["E501", "E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-asyncio_mode = "auto"
+asyncio_mode = "strict"
 
 [tool.sqlfluff.core]
 dialect = "bigquery"
