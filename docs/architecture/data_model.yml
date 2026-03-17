@@ -1,0 +1,1431 @@
+# Urban Pulse Platform — Complete Data Model
+# Generated: Phase 0, Task 2
+# Architecture: Medallion (Bronze/Silver/Gold) + Star Schema in marts layer
+#
+# This file is the authoritative data model reference.
+# Every table built in Phases 1-8 must match this spec exactly.
+# Changes require a new ADR entry.
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LAYER 1: RAW (Bronze) — Exact copy of source. Never transformed. Append-only.
+# Partition: ingestion_date. No deduplication. No type casting.
+# ══════════════════════════════════════════════════════════════════════════════
+
+tables:
+
+  # ── NYC 311 ────────────────────────────────────────────────────────────────
+  raw.nyc_311_raw:
+    description: >
+      Exact copy of NYC 311 Service Request API response. One row per API record.
+      Append-only — duplicates handled in staging layer.
+    grain: one row per API response record per ingestion batch
+    source: https://data.cityofnewyork.us/resource/erm2-nwe9.json
+    load_pattern: near-realtime batch (every 15 min)
+    partition_by: ingestion_date DATE
+    columns:
+      - name: _ingestion_id
+        type: STRING
+        description: UUID generated at ingestion time. Primary key for raw layer.
+        nullable: false
+      - name: _ingestion_timestamp
+        type: TIMESTAMP
+        description: Exact timestamp when this record was written to raw layer.
+        nullable: false
+      - name: _ingestion_date
+        type: DATE
+        description: Partition column. Derived from _ingestion_timestamp.
+        nullable: false
+      - name: _source_file
+        type: STRING
+        description: S3 path of the raw JSON file this record came from.
+        nullable: true
+      - name: unique_key
+        type: STRING
+        description: Natural key from NYC 311 system. NOT guaranteed unique across batches.
+        nullable: true
+      - name: created_date
+        type: STRING
+        description: Raw string from API. Cast to TIMESTAMP in staging.
+        nullable: true
+      - name: closed_date
+        type: STRING
+        description: Raw string. NULL if complaint still open.
+        nullable: true
+      - name: agency
+        type: STRING
+        nullable: true
+      - name: agency_name
+        type: STRING
+        nullable: true
+      - name: complaint_type
+        type: STRING
+        nullable: true
+      - name: descriptor
+        type: STRING
+        nullable: true
+      - name: location_type
+        type: STRING
+        nullable: true
+      - name: incident_zip
+        type: STRING
+        nullable: true
+      - name: incident_address
+        type: STRING
+        description: "PII FLAG: full street address. Masked in staging."
+        nullable: true
+        pii: true
+      - name: street_name
+        type: STRING
+        nullable: true
+      - name: borough
+        type: STRING
+        description: "~15% null. Enriched from zip code in staging."
+        nullable: true
+      - name: latitude
+        type: STRING
+        description: Raw string. Cast to FLOAT64 in staging.
+        nullable: true
+      - name: longitude
+        type: STRING
+        description: Raw string. Cast to FLOAT64 in staging.
+        nullable: true
+      - name: status
+        type: STRING
+        description: "Changes over time — Open, Pending, In Progress, Closed. SCD Type 2 in snapshots."
+        nullable: true
+      - name: resolution_description
+        type: STRING
+        nullable: true
+      - name: community_board
+        type: STRING
+        nullable: true
+      - name: raw_json
+        type: STRING
+        description: Full raw JSON string of the API record for reprocessing.
+        nullable: false
+
+  # ── NYC Crime ──────────────────────────────────────────────────────────────
+  raw.nyc_crime_raw:
+    description: >
+      NYPD Complaint Data Historic. Daily batch load. Full history from 2006.
+    grain: one row per NYPD complaint per ingestion batch
+    source: https://data.cityofnewyork.us/resource/qgea-i56i.json
+    load_pattern: daily batch
+    partition_by: ingestion_date DATE
+    columns:
+      - name: _ingestion_id
+        type: STRING
+        nullable: false
+      - name: _ingestion_timestamp
+        type: TIMESTAMP
+        nullable: false
+      - name: _ingestion_date
+        type: DATE
+        nullable: false
+      - name: cmplnt_num
+        type: STRING
+        description: Natural key. NYPD complaint number.
+        nullable: true
+      - name: cmplnt_fr_dt
+        type: STRING
+        description: "Complaint FROM date. Raw string. Format: MM/DD/YYYY"
+        nullable: true
+      - name: cmplnt_fr_tm
+        type: STRING
+        description: "Complaint FROM time. Separate field. Format: HH:MM:SS"
+        nullable: true
+      - name: cmplnt_to_dt
+        type: STRING
+        nullable: true
+      - name: cmplnt_to_tm
+        type: STRING
+        nullable: true
+      - name: rpt_dt
+        type: STRING
+        description: Date reported to police.
+        nullable: true
+      - name: ofns_desc
+        type: STRING
+        description: Offense description (e.g. ASSAULT, ROBBERY)
+        nullable: true
+      - name: pd_desc
+        type: STRING
+        description: Internal NYPD offense classification
+        nullable: true
+      - name: law_cat_cd
+        type: STRING
+        description: "FELONY, MISDEMEANOR, or VIOLATION"
+        nullable: true
+      - name: boro_nm
+        type: STRING
+        description: Borough name. Sometimes null.
+        nullable: true
+      - name: addr_pct_cd
+        type: STRING
+        description: NYPD precinct code
+        nullable: true
+      - name: latitude
+        type: STRING
+        nullable: true
+      - name: longitude
+        type: STRING
+        nullable: true
+      - name: susp_age_group
+        type: STRING
+        description: "PII-ADJACENT: suspect demographics"
+        nullable: true
+        pii_adjacent: true
+      - name: susp_race
+        type: STRING
+        description: "PII-ADJACENT: suspect demographics"
+        nullable: true
+        pii_adjacent: true
+      - name: susp_sex
+        type: STRING
+        nullable: true
+        pii_adjacent: true
+      - name: vic_age_group
+        type: STRING
+        nullable: true
+        pii_adjacent: true
+      - name: vic_race
+        type: STRING
+        nullable: true
+        pii_adjacent: true
+      - name: vic_sex
+        type: STRING
+        nullable: true
+        pii_adjacent: true
+      - name: raw_json
+        type: STRING
+        nullable: false
+
+  # ── TfL Transit ────────────────────────────────────────────────────────────
+  raw.tfl_line_status_raw:
+    description: >
+      TfL tube line status. Polled every 30 seconds via streaming.
+      Stores every status event — not just current state.
+    grain: one row per line per poll cycle
+    source: https://api.tfl.gov.uk/Line/Mode/tube/Status
+    load_pattern: streaming (30s poll → Pub/Sub → Dataflow)
+    partition_by: ingestion_date DATE
+    columns:
+      - name: _ingestion_id
+        type: STRING
+        nullable: false
+      - name: _ingestion_timestamp
+        type: TIMESTAMP
+        nullable: false
+      - name: _ingestion_date
+        type: DATE
+        nullable: false
+      - name: line_id
+        type: STRING
+        description: e.g. victoria, central, jubilee
+        nullable: false
+      - name: line_name
+        type: STRING
+        nullable: false
+      - name: status_severity
+        type: INTEGER
+        description: "10=Good Service, 5=Minor Delays, 20=Service Closed"
+        nullable: true
+      - name: status_severity_description
+        type: STRING
+        nullable: true
+      - name: reason
+        type: STRING
+        description: Free-text disruption reason. NULL when Good Service.
+        nullable: true
+      - name: is_disrupted
+        type: BOOLEAN
+        nullable: false
+      - name: raw_json
+        type: STRING
+        nullable: false
+
+  raw.tfl_arrivals_raw:
+    description: >
+      TfL live arrivals at monitored stop points. Polled every 30 seconds.
+    grain: one row per expected arrival per poll cycle
+    source: https://api.tfl.gov.uk/StopPoint/{stopId}/Arrivals
+    load_pattern: streaming (30s poll)
+    partition_by: ingestion_date DATE
+    columns:
+      - name: _ingestion_id
+        type: STRING
+        nullable: false
+      - name: _ingestion_timestamp
+        type: TIMESTAMP
+        nullable: false
+      - name: _ingestion_date
+        type: DATE
+        nullable: false
+      - name: vehicle_id
+        type: STRING
+        nullable: true
+      - name: line_id
+        type: STRING
+        nullable: false
+      - name: line_name
+        type: STRING
+        nullable: false
+      - name: station_name
+        type: STRING
+        nullable: false
+      - name: stop_point_id
+        type: STRING
+        nullable: false
+      - name: platform_name
+        type: STRING
+        nullable: true
+      - name: direction
+        type: STRING
+        nullable: true
+      - name: destination_name
+        type: STRING
+        nullable: true
+      - name: time_to_station
+        type: INTEGER
+        description: Seconds until arrival at this stop.
+        nullable: true
+      - name: expected_arrival
+        type: STRING
+        description: ISO timestamp string. Cast in staging.
+        nullable: true
+      - name: raw_json
+        type: STRING
+        nullable: false
+
+  # ── AirNow Air Quality ─────────────────────────────────────────────────────
+  raw.airnow_observations_raw:
+    description: >
+      AirNow EPA air quality observations. One row per pollutant per location per hour.
+      Multiple records per timestamp — pivoted in staging.
+    grain: one row per pollutant observation per ingestion
+    source: https://www.airnowapi.org/aq/observation/latLong/current/
+    load_pattern: hourly batch
+    partition_by: ingestion_date DATE
+    columns:
+      - name: _ingestion_id
+        type: STRING
+        nullable: false
+      - name: _ingestion_timestamp
+        type: TIMESTAMP
+        nullable: false
+      - name: _ingestion_date
+        type: DATE
+        nullable: false
+      - name: date_observed
+        type: STRING
+        description: Observation date string.
+        nullable: true
+      - name: hour_observed
+        type: INTEGER
+        description: Hour of observation (0-23 local time).
+        nullable: true
+      - name: local_time_zone
+        type: STRING
+        nullable: true
+      - name: reporting_area
+        type: STRING
+        description: Geographic area name (e.g. New York City - Manhattan)
+        nullable: true
+      - name: state_code
+        type: STRING
+        nullable: true
+      - name: latitude
+        type: FLOAT64
+        nullable: true
+      - name: longitude
+        type: FLOAT64
+        nullable: true
+      - name: parameter_name
+        type: STRING
+        description: "PM2.5, PM10, O3, NO2, CO, SO2"
+        nullable: false
+      - name: aqi
+        type: INTEGER
+        description: Air Quality Index calculated value.
+        nullable: true
+      - name: category_number
+        type: INTEGER
+        description: "1=Good, 2=Moderate, 3=Unhealthy Sensitive, 4=Unhealthy, 5=Very Unhealthy, 6=Hazardous"
+        nullable: true
+      - name: category_name
+        type: STRING
+        nullable: true
+      - name: raw_json
+        type: STRING
+        nullable: false
+
+  # ── Weather ────────────────────────────────────────────────────────────────
+  raw.weather_observations_raw:
+    description: >
+      Open-Meteo hourly weather observations. Columnar API response
+      unpacked into row-per-hour format at ingestion time.
+    grain: one row per hour per location
+    source: https://api.open-meteo.com/v1/forecast + /archive
+    load_pattern: hourly batch
+    partition_by: ingestion_date DATE
+    columns:
+      - name: _ingestion_id
+        type: STRING
+        nullable: false
+      - name: _ingestion_timestamp
+        type: TIMESTAMP
+        nullable: false
+      - name: _ingestion_date
+        type: DATE
+        nullable: false
+      - name: observation_time
+        type: STRING
+        description: ISO timestamp string for this hourly observation.
+        nullable: false
+      - name: city
+        type: STRING
+        description: "nyc or london"
+        nullable: false
+      - name: latitude
+        type: FLOAT64
+        nullable: false
+      - name: longitude
+        type: FLOAT64
+        nullable: false
+      - name: temperature_2m
+        type: FLOAT64
+        description: Temperature at 2m height in Celsius.
+        nullable: true
+      - name: relative_humidity_2m
+        type: FLOAT64
+        nullable: true
+      - name: precipitation
+        type: FLOAT64
+        description: mm per hour
+        nullable: true
+      - name: precipitation_probability
+        type: INTEGER
+        nullable: true
+      - name: wind_speed_10m
+        type: FLOAT64
+        description: km/h
+        nullable: true
+      - name: weather_code
+        type: INTEGER
+        description: WMO weather code. Mapped to description via seed table.
+        nullable: true
+      - name: raw_json
+        type: STRING
+        nullable: false
+
+  # ── Pipeline Metadata ──────────────────────────────────────────────────────
+  raw._ingestion_log:
+    description: >
+      Every pipeline run recorded here. Used for monitoring, alerting, backfill tracking.
+    grain: one row per pipeline run
+    columns:
+      - name: run_id
+        type: STRING
+        nullable: false
+      - name: pipeline_name
+        type: STRING
+        nullable: false
+      - name: source
+        type: STRING
+        nullable: false
+      - name: started_at
+        type: TIMESTAMP
+        nullable: false
+      - name: completed_at
+        type: TIMESTAMP
+        nullable: true
+      - name: status
+        type: STRING
+        description: "running, success, failed, partial"
+        nullable: false
+      - name: records_read
+        type: INTEGER
+        nullable: true
+      - name: records_written
+        type: INTEGER
+        nullable: true
+      - name: records_rejected
+        type: INTEGER
+        nullable: true
+      - name: error_message
+        type: STRING
+        nullable: true
+      - name: s3_path
+        type: STRING
+        nullable: true
+      - name: bigquery_job_id
+        type: STRING
+        nullable: true
+
+  raw._schema_versions:
+    description: >
+      Tracks schema changes over time per source.
+      Written every time a new field appears or a field type changes.
+    grain: one row per schema change event
+    columns:
+      - name: version_id
+        type: STRING
+        nullable: false
+      - name: source
+        type: STRING
+        nullable: false
+      - name: detected_at
+        type: TIMESTAMP
+        nullable: false
+      - name: change_type
+        type: STRING
+        description: "new_field, type_change, field_removed"
+        nullable: false
+      - name: field_name
+        type: STRING
+        nullable: false
+      - name: old_type
+        type: STRING
+        nullable: true
+      - name: new_type
+        type: STRING
+        nullable: true
+      - name: action_taken
+        type: STRING
+        description: "logged_only, pipeline_paused, auto_cast"
+        nullable: false
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LAYER 2: STAGING (Silver Part 1)
+# Clean, type-cast, deduplicate, mask PII. Views in BigQuery (no storage cost).
+# ══════════════════════════════════════════════════════════════════════════════
+
+  stg_nyc_311:
+    description: >
+      Cleaned 311 complaints. Deduplicated on unique_key (latest record wins).
+      Types cast. Borough null-filled from zip lookup. Address masked.
+    materialization: view
+    source: raw.nyc_311_raw
+    columns:
+      - name: complaint_id
+        type: STRING
+        description: Surrogate key — MD5 of unique_key.
+        nullable: false
+      - name: source_unique_key
+        type: STRING
+        description: Original unique_key from NYC 311 system.
+        nullable: false
+      - name: created_at
+        type: TIMESTAMP
+        nullable: false
+      - name: closed_at
+        type: TIMESTAMP
+        nullable: true
+      - name: agency_code
+        type: STRING
+        nullable: false
+      - name: complaint_type
+        type: STRING
+        nullable: false
+      - name: descriptor
+        type: STRING
+        nullable: true
+      - name: incident_zip
+        type: STRING
+        nullable: true
+      - name: borough
+        type: STRING
+        description: Null-filled using borough_zip_lookup seed table.
+        nullable: true
+      - name: latitude
+        type: FLOAT64
+        nullable: true
+      - name: longitude
+        type: FLOAT64
+        nullable: true
+      - name: status
+        type: STRING
+        nullable: false
+      - name: community_board
+        type: STRING
+        nullable: true
+      - name: _ingestion_timestamp
+        type: TIMESTAMP
+        nullable: false
+
+  stg_nyc_crime:
+    description: >
+      Cleaned NYPD complaints. Date+time fields combined. Coordinates cast.
+      PII-adjacent fields carried through but tagged.
+    materialization: view
+    source: raw.nyc_crime_raw
+    columns:
+      - name: complaint_id
+        type: STRING
+        description: Surrogate key — MD5 of cmplnt_num.
+        nullable: false
+      - name: source_complaint_num
+        type: STRING
+        nullable: false
+      - name: occurred_at
+        type: TIMESTAMP
+        description: Combined cmplnt_fr_dt + cmplnt_fr_tm.
+        nullable: true
+      - name: reported_at
+        type: DATE
+        nullable: true
+      - name: offense_description
+        type: STRING
+        nullable: true
+      - name: offense_category
+        type: STRING
+        description: "FELONY, MISDEMEANOR, VIOLATION"
+        nullable: true
+      - name: borough
+        type: STRING
+        nullable: true
+      - name: precinct_code
+        type: STRING
+        nullable: true
+      - name: latitude
+        type: FLOAT64
+        nullable: true
+      - name: longitude
+        type: FLOAT64
+        nullable: true
+      - name: suspect_age_group
+        type: STRING
+        description: "PII-ADJACENT — only in staging/intermediate. Removed in marts."
+        nullable: true
+      - name: suspect_race
+        type: STRING
+        nullable: true
+      - name: victim_age_group
+        type: STRING
+        nullable: true
+      - name: victim_race
+        type: STRING
+        nullable: true
+      - name: _ingestion_timestamp
+        type: TIMESTAMP
+        nullable: false
+
+  stg_tfl_line_status:
+    description: >
+      Cleaned TfL line status events. Severity mapped to description.
+      Deduplicated on line_id + ingestion window.
+    materialization: view
+    source: raw.tfl_line_status_raw
+    columns:
+      - name: status_event_id
+        type: STRING
+        description: Surrogate key — MD5 of line_id + _ingestion_timestamp.
+        nullable: false
+      - name: line_id
+        type: STRING
+        nullable: false
+      - name: line_name
+        type: STRING
+        nullable: false
+      - name: observed_at
+        type: TIMESTAMP
+        nullable: false
+      - name: status_severity
+        type: INTEGER
+        nullable: false
+      - name: status_description
+        type: STRING
+        description: Mapped from tfl_severity_lookup seed.
+        nullable: false
+      - name: is_disrupted
+        type: BOOLEAN
+        nullable: false
+      - name: disruption_reason
+        type: STRING
+        nullable: true
+
+  stg_tfl_arrivals:
+    description: >
+      Cleaned TfL arrivals. expected_arrival cast to TIMESTAMP.
+      Delay calculated as difference from scheduled time where available.
+    materialization: view
+    source: raw.tfl_arrivals_raw
+    columns:
+      - name: arrival_event_id
+        type: STRING
+        description: Surrogate key — MD5 of vehicle_id + stop_point_id + expected_arrival.
+        nullable: false
+      - name: vehicle_id
+        type: STRING
+        nullable: true
+      - name: line_id
+        type: STRING
+        nullable: false
+      - name: line_name
+        type: STRING
+        nullable: false
+      - name: stop_point_id
+        type: STRING
+        nullable: false
+      - name: station_name
+        type: STRING
+        nullable: false
+      - name: direction
+        type: STRING
+        nullable: true
+      - name: destination_name
+        type: STRING
+        nullable: true
+      - name: time_to_station_seconds
+        type: INTEGER
+        nullable: true
+      - name: expected_arrival_at
+        type: TIMESTAMP
+        nullable: true
+      - name: observed_at
+        type: TIMESTAMP
+        nullable: false
+
+  stg_airnow:
+    description: >
+      Pivoted AirNow observations — one row per location per hour
+      with each pollutant as a separate column.
+    materialization: view
+    source: raw.airnow_observations_raw
+    columns:
+      - name: observation_id
+        type: STRING
+        description: MD5 of reporting_area + observation_hour.
+        nullable: false
+      - name: observed_at
+        type: TIMESTAMP
+        nullable: false
+      - name: reporting_area
+        type: STRING
+        nullable: false
+      - name: city
+        type: STRING
+        description: Mapped from reporting_area — nyc or london.
+        nullable: false
+      - name: latitude
+        type: FLOAT64
+        nullable: true
+      - name: longitude
+        type: FLOAT64
+        nullable: true
+      - name: pm25_aqi
+        type: INTEGER
+        nullable: true
+      - name: pm10_aqi
+        type: INTEGER
+        nullable: true
+      - name: ozone_aqi
+        type: INTEGER
+        nullable: true
+      - name: no2_aqi
+        type: INTEGER
+        nullable: true
+      - name: overall_aqi
+        type: INTEGER
+        description: Max AQI across all pollutants.
+        nullable: true
+      - name: aqi_category
+        type: STRING
+        description: "Good, Moderate, Unhealthy for Sensitive Groups, Unhealthy, Very Unhealthy, Hazardous"
+        nullable: true
+
+  stg_weather:
+    description: >
+      Cleaned weather observations. WMO codes mapped to descriptions.
+      One row per hour per city.
+    materialization: view
+    source: raw.weather_observations_raw
+    columns:
+      - name: observation_id
+        type: STRING
+        description: MD5 of city + observation_time.
+        nullable: false
+      - name: observed_at
+        type: TIMESTAMP
+        nullable: false
+      - name: city
+        type: STRING
+        nullable: false
+      - name: latitude
+        type: FLOAT64
+        nullable: false
+      - name: longitude
+        type: FLOAT64
+        nullable: false
+      - name: temperature_celsius
+        type: FLOAT64
+        nullable: true
+      - name: humidity_pct
+        type: FLOAT64
+        nullable: true
+      - name: precipitation_mm
+        type: FLOAT64
+        nullable: true
+      - name: precipitation_probability_pct
+        type: INTEGER
+        nullable: true
+      - name: wind_speed_kmh
+        type: FLOAT64
+        nullable: true
+      - name: weather_code
+        type: INTEGER
+        nullable: true
+      - name: weather_description
+        type: STRING
+        description: Mapped from wmo_weather_code_lookup seed.
+        nullable: true
+      - name: is_precipitation
+        type: BOOLEAN
+        description: True if precipitation_mm > 0.1
+        nullable: false
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LAYER 3: INTERMEDIATE (Silver Part 2)
+# Business logic, joins, enrichments. Tables (not views) — results cached.
+# ══════════════════════════════════════════════════════════════════════════════
+
+  int_complaints_enriched:
+    description: >
+      311 complaints enriched with borough, neighborhood, weather at time of
+      complaint, and air quality at time of complaint.
+    materialization: table
+    sources:
+      - stg_nyc_311
+      - stg_weather
+      - stg_airnow
+    columns:
+      - name: complaint_id
+        type: STRING
+        nullable: false
+      - name: created_at
+        type: TIMESTAMP
+        nullable: false
+      - name: complaint_hour
+        type: TIMESTAMP
+        description: Truncated to hour for weather/AQ join.
+        nullable: false
+      - name: complaint_date
+        type: DATE
+        nullable: false
+      - name: complaint_type
+        type: STRING
+        nullable: false
+      - name: descriptor
+        type: STRING
+        nullable: true
+      - name: borough
+        type: STRING
+        nullable: true
+      - name: incident_zip
+        type: STRING
+        nullable: true
+      - name: status
+        type: STRING
+        nullable: false
+      - name: is_open
+        type: BOOLEAN
+        nullable: false
+      - name: hours_to_close
+        type: FLOAT64
+        description: NULL if still open.
+        nullable: true
+      - name: weather_temperature_c
+        type: FLOAT64
+        description: Weather at time and city of complaint.
+        nullable: true
+      - name: weather_precipitation_mm
+        type: FLOAT64
+        nullable: true
+      - name: weather_description
+        type: STRING
+        nullable: true
+      - name: air_quality_aqi
+        type: INTEGER
+        nullable: true
+      - name: air_quality_category
+        type: STRING
+        nullable: true
+      - name: latitude
+        type: FLOAT64
+        nullable: true
+      - name: longitude
+        type: FLOAT64
+        nullable: true
+
+  int_transit_delays:
+    description: >
+      TfL disruption events classified by type and duration.
+      Cross-referenced with weather at time of disruption.
+    materialization: table
+    sources:
+      - stg_tfl_line_status
+      - stg_weather
+    columns:
+      - name: disruption_event_id
+        type: STRING
+        nullable: false
+      - name: line_id
+        type: STRING
+        nullable: false
+      - name: line_name
+        type: STRING
+        nullable: false
+      - name: disruption_started_at
+        type: TIMESTAMP
+        nullable: false
+      - name: disruption_ended_at
+        type: TIMESTAMP
+        nullable: true
+      - name: duration_minutes
+        type: INTEGER
+        nullable: true
+      - name: severity_level
+        type: INTEGER
+        nullable: false
+      - name: severity_description
+        type: STRING
+        nullable: false
+      - name: disruption_reason
+        type: STRING
+        nullable: true
+      - name: disruption_category
+        type: STRING
+        description: "signal_failure, weather, planned, staffing, unknown"
+        nullable: true
+      - name: weather_temperature_c
+        type: FLOAT64
+        nullable: true
+      - name: weather_precipitation_mm
+        type: FLOAT64
+        nullable: true
+      - name: is_weather_related
+        type: BOOLEAN
+        nullable: false
+
+  int_air_quality_indexed:
+    description: >
+      Hourly AQI with 24h rolling average, daily peak, and
+      categorical health advisory per city.
+    materialization: table
+    sources:
+      - stg_airnow
+    columns:
+      - name: observation_id
+        type: STRING
+        nullable: false
+      - name: observed_at
+        type: TIMESTAMP
+        nullable: false
+      - name: observation_date
+        type: DATE
+        nullable: false
+      - name: city
+        type: STRING
+        nullable: false
+      - name: overall_aqi
+        type: INTEGER
+        nullable: true
+      - name: aqi_category
+        type: STRING
+        nullable: true
+      - name: aqi_24h_rolling_avg
+        type: FLOAT64
+        description: 24-hour rolling average AQI.
+        nullable: true
+      - name: daily_peak_aqi
+        type: INTEGER
+        description: Maximum AQI for the calendar day.
+        nullable: true
+      - name: dominant_pollutant
+        type: STRING
+        description: Pollutant with highest AQI at this hour.
+        nullable: true
+      - name: health_advisory
+        type: STRING
+        description: "None, Sensitive Groups, All Groups, Avoid Outdoor"
+        nullable: true
+
+  int_cross_domain_hourly:
+    description: >
+      The core cross-domain table. One row per city per hour with
+      all domain metrics joined. This is what makes analysis possible.
+    materialization: table
+    sources:
+      - stg_weather
+      - stg_airnow
+      - stg_tfl_line_status (london only)
+    grain: one row per city per hour
+    partition_by: event_date DATE
+    cluster_by: [city]
+    columns:
+      - name: cross_domain_id
+        type: STRING
+        description: MD5 of city + event_hour.
+        nullable: false
+      - name: event_hour
+        type: TIMESTAMP
+        nullable: false
+      - name: event_date
+        type: DATE
+        nullable: false
+      - name: city
+        type: STRING
+        nullable: false
+      - name: temperature_celsius
+        type: FLOAT64
+        nullable: true
+      - name: precipitation_mm
+        type: FLOAT64
+        nullable: true
+      - name: wind_speed_kmh
+        type: FLOAT64
+        nullable: true
+      - name: weather_description
+        type: STRING
+        nullable: true
+      - name: overall_aqi
+        type: INTEGER
+        nullable: true
+      - name: aqi_category
+        type: STRING
+        nullable: true
+      - name: nyc_311_complaints_count
+        type: INTEGER
+        description: Number of 311 complaints created in this hour.
+        nullable: true
+      - name: nyc_311_noise_complaints
+        type: INTEGER
+        nullable: true
+      - name: nyc_crime_incidents_count
+        type: INTEGER
+        description: NYC only.
+        nullable: true
+      - name: london_transit_disruptions
+        type: INTEGER
+        description: London only. Number of lines disrupted this hour.
+        nullable: true
+      - name: london_transit_disrupted_lines
+        type: STRING
+        description: Comma-separated list of disrupted line IDs.
+        nullable: true
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LAYER 4: MARTS (Gold) — Aggregated, consumer-ready, BI + ML facing
+# Tables. Partitioned by date. Clustered for query performance.
+# ══════════════════════════════════════════════════════════════════════════════
+
+  mart_city_daily_summary:
+    description: >
+      One row per city per day. All domain metrics summarised.
+      Primary table for executive dashboards and Tableau.
+    materialization: table
+    partition_by: summary_date DATE
+    cluster_by: [city]
+    columns:
+      - name: summary_id
+        type: STRING
+        nullable: false
+      - name: summary_date
+        type: DATE
+        nullable: false
+      - name: city
+        type: STRING
+        nullable: false
+      - name: avg_temperature_c
+        type: FLOAT64
+        nullable: true
+      - name: total_precipitation_mm
+        type: FLOAT64
+        nullable: true
+      - name: max_wind_speed_kmh
+        type: FLOAT64
+        nullable: true
+      - name: dominant_weather
+        type: STRING
+        nullable: true
+      - name: avg_aqi
+        type: FLOAT64
+        nullable: true
+      - name: max_aqi
+        type: INTEGER
+        nullable: true
+      - name: worst_aqi_category
+        type: STRING
+        nullable: true
+      - name: nyc_total_311_complaints
+        type: INTEGER
+        nullable: true
+      - name: nyc_open_311_complaints
+        type: INTEGER
+        nullable: true
+      - name: nyc_avg_resolution_hours
+        type: FLOAT64
+        nullable: true
+      - name: nyc_total_crime_incidents
+        type: INTEGER
+        nullable: true
+      - name: nyc_felony_count
+        type: INTEGER
+        nullable: true
+      - name: london_transit_disruption_events
+        type: INTEGER
+        nullable: true
+      - name: london_avg_disruption_minutes
+        type: FLOAT64
+        nullable: true
+      - name: london_lines_disrupted_count
+        type: INTEGER
+        nullable: true
+
+  mart_complaint_sla:
+    description: >
+      311 complaint resolution SLA tracking.
+      How long does each complaint type take to close by borough?
+    materialization: table
+    partition_by: complaint_date DATE
+    cluster_by: [borough, complaint_type]
+    columns:
+      - name: complaint_id
+        type: STRING
+        nullable: false
+      - name: complaint_date
+        type: DATE
+        nullable: false
+      - name: complaint_type
+        type: STRING
+        nullable: false
+      - name: borough
+        type: STRING
+        nullable: true
+      - name: status
+        type: STRING
+        nullable: false
+      - name: is_open
+        type: BOOLEAN
+        nullable: false
+      - name: hours_to_close
+        type: FLOAT64
+        nullable: true
+      - name: sla_target_hours
+        type: INTEGER
+        description: Expected resolution hours per complaint type (seed table).
+        nullable: true
+      - name: met_sla
+        type: BOOLEAN
+        nullable: true
+      - name: weather_at_creation
+        type: STRING
+        nullable: true
+      - name: aqi_at_creation
+        type: INTEGER
+        nullable: true
+
+  mart_transit_performance:
+    description: >
+      TfL line performance metrics. Daily disruption frequency,
+      duration, and severity trends per line.
+    materialization: table
+    partition_by: performance_date DATE
+    cluster_by: [line_id]
+    columns:
+      - name: performance_id
+        type: STRING
+        nullable: false
+      - name: performance_date
+        type: DATE
+        nullable: false
+      - name: line_id
+        type: STRING
+        nullable: false
+      - name: line_name
+        type: STRING
+        nullable: false
+      - name: total_disruption_events
+        type: INTEGER
+        nullable: false
+      - name: total_disruption_minutes
+        type: INTEGER
+        nullable: true
+      - name: pct_time_good_service
+        type: FLOAT64
+        nullable: true
+      - name: most_common_disruption_reason
+        type: STRING
+        nullable: true
+      - name: weather_related_disruptions
+        type: INTEGER
+        nullable: true
+      - name: avg_aqi_on_disruption_days
+        type: FLOAT64
+        nullable: true
+
+  mart_air_quality_trends:
+    description: >
+      Daily air quality summary with 7-day and 30-day rolling averages.
+      Used for health advisory trend analysis.
+    materialization: table
+    partition_by: observation_date DATE
+    cluster_by: [city]
+    columns:
+      - name: trend_id
+        type: STRING
+        nullable: false
+      - name: observation_date
+        type: DATE
+        nullable: false
+      - name: city
+        type: STRING
+        nullable: false
+      - name: avg_aqi
+        type: FLOAT64
+        nullable: true
+      - name: max_aqi
+        type: INTEGER
+        nullable: true
+      - name: dominant_pollutant
+        type: STRING
+        nullable: true
+      - name: aqi_7d_rolling_avg
+        type: FLOAT64
+        nullable: true
+      - name: aqi_30d_rolling_avg
+        type: FLOAT64
+        nullable: true
+      - name: days_unhealthy_last_30d
+        type: INTEGER
+        nullable: true
+      - name: avg_temperature_c
+        type: FLOAT64
+        nullable: true
+      - name: avg_precipitation_mm
+        type: FLOAT64
+        nullable: true
+
+  mart_cross_domain_correlations:
+    description: >
+      The flagship analytical table. Daily cross-domain correlations
+      enabling the key analytical questions — AQ vs complaints,
+      weather vs crime, transit disruptions vs complaints etc.
+    materialization: table
+    partition_by: correlation_date DATE
+    cluster_by: [city]
+    columns:
+      - name: correlation_id
+        type: STRING
+        nullable: false
+      - name: correlation_date
+        type: DATE
+        nullable: false
+      - name: city
+        type: STRING
+        nullable: false
+      - name: avg_aqi
+        type: FLOAT64
+        nullable: true
+      - name: total_precipitation_mm
+        type: FLOAT64
+        nullable: true
+      - name: avg_temperature_c
+        type: FLOAT64
+        nullable: true
+      - name: nyc_311_complaints
+        type: INTEGER
+        nullable: true
+      - name: nyc_crime_incidents
+        type: INTEGER
+        nullable: true
+      - name: london_transit_disruptions
+        type: INTEGER
+        nullable: true
+      - name: complaints_per_bad_air_day
+        type: FLOAT64
+        description: 311 complaints on days when AQI > 100.
+        nullable: true
+      - name: crime_on_extreme_weather_days
+        type: INTEGER
+        description: Crime incidents on days with precipitation > 25mm.
+        nullable: true
+      - name: transit_disruptions_on_rain_days
+        type: INTEGER
+        nullable: true
+
+  mart_ml_features:
+    description: >
+      Flat, ML-ready feature table. One row per city per hour.
+      Fed directly to ML models for training and inference.
+      No nulls — all filled with domain-appropriate defaults.
+    materialization: table
+    partition_by: feature_date DATE
+    cluster_by: [city]
+    columns:
+      - name: feature_id
+        type: STRING
+        nullable: false
+      - name: feature_timestamp
+        type: TIMESTAMP
+        nullable: false
+      - name: feature_date
+        type: DATE
+        nullable: false
+      - name: city
+        type: STRING
+        nullable: false
+      - name: hour_of_day
+        type: INTEGER
+        nullable: false
+      - name: day_of_week
+        type: INTEGER
+        nullable: false
+      - name: is_weekend
+        type: BOOLEAN
+        nullable: false
+      - name: month
+        type: INTEGER
+        nullable: false
+      - name: temperature_c
+        type: FLOAT64
+        nullable: false
+      - name: precipitation_mm
+        type: FLOAT64
+        nullable: false
+      - name: wind_speed_kmh
+        type: FLOAT64
+        nullable: false
+      - name: is_raining
+        type: BOOLEAN
+        nullable: false
+      - name: aqi
+        type: INTEGER
+        nullable: false
+      - name: aqi_category_encoded
+        type: INTEGER
+        description: "1=Good, 2=Moderate, 3=Unhealthy Sensitive, 4=Unhealthy+"
+        nullable: false
+      - name: nyc_complaints_last_1h
+        type: INTEGER
+        nullable: false
+      - name: nyc_complaints_last_24h
+        type: INTEGER
+        nullable: false
+      - name: london_lines_disrupted
+        type: INTEGER
+        nullable: false
+      - name: label_complaints_next_1h
+        type: INTEGER
+        description: "Prediction target: complaints in next hour"
+        nullable: true
+      - name: label_aqi_next_6h
+        type: INTEGER
+        description: "Prediction target: AQI in 6 hours"
+        nullable: true
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LAYER 5: SNAPSHOTS (SCD Type 2)
+# Track historical changes for slowly changing entities.
+# ══════════════════════════════════════════════════════════════════════════════
+
+  scd_311_complaint_status:
+    description: >
+      Full status history for every 311 complaint.
+      Tracks every transition: Open → In Progress → Closed.
+    strategy: timestamp
+    updated_at: _ingestion_timestamp
+    unique_key: source_unique_key
+    columns:
+      - source_unique_key
+      - complaint_type
+      - borough
+      - status
+      - resolution_description
+      - dbt_scd_id        # added by dbt
+      - dbt_updated_at    # added by dbt
+      - dbt_valid_from    # added by dbt
+      - dbt_valid_to      # added by dbt (NULL = current record)
+      - dbt_is_deleted    # added by dbt
+
+  scd_tfl_line_status:
+    description: >
+      Full status change history per TfL line.
+      When did Victoria line go from Good Service to Minor Delays and back?
+    strategy: timestamp
+    updated_at: observed_at
+    unique_key: line_id
+    columns:
+      - line_id
+      - line_name
+      - status_severity
+      - status_description
+      - is_disrupted
+      - disruption_reason
+      - dbt_scd_id
+      - dbt_updated_at
+      - dbt_valid_from
+      - dbt_valid_to
+      - dbt_is_deleted
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SEED TABLES — Static reference data. CSV files in transformation/seeds/
+# ══════════════════════════════════════════════════════════════════════════════
+
+seeds:
+
+  borough_zip_lookup:
+    description: Maps NYC zip codes to borough names.
+    file: transformation/seeds/borough_zip_lookup.csv
+    columns: [zip_code, borough_name, neighborhood]
+
+  tfl_severity_lookup:
+    description: Maps TfL statusSeverity integer to human-readable description.
+    file: transformation/seeds/tfl_severity_lookup.csv
+    columns: [severity_code, severity_description, is_disrupted]
+
+  wmo_weather_code_lookup:
+    description: Maps WMO weather codes to descriptions and categories.
+    file: transformation/seeds/wmo_weather_code_lookup.csv
+    columns: [wmo_code, description, category, is_precipitation]
+
+  nyc_community_board_lookup:
+    description: Maps NYC community board numbers to neighborhoods and boroughs.
+    file: transformation/seeds/nyc_community_board_lookup.csv
+    columns: [community_board, borough, neighborhoods]
+
+  complaint_type_sla:
+    description: Expected resolution time (hours) per 311 complaint type.
+    file: transformation/seeds/complaint_type_sla.csv
+    columns: [complaint_type, sla_hours, priority_level]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MONITORING TABLES
+# ══════════════════════════════════════════════════════════════════════════════
+
+monitoring_tables:
+
+  pipeline_run_log: "See raw._ingestion_log — mirrored here with enriched metadata"
+
+  data_quality_results:
+    description: Results of every Great Expectations checkpoint run.
+    columns:
+      - run_id, checkpoint_name, suite_name, table_name
+      - run_time, success, evaluated_expectations
+      - successful_expectations, unsuccessful_expectations
+      - success_pct, failed_checks_detail
+
+  sla_breach_log:
+    description: Every pipeline SLA breach — used for alerting.
+    columns:
+      - breach_id, pipeline_name, expected_completion
+      - actual_completion, breach_minutes, alerted_at
+
+  schema_change_log:
+    description: "See raw._schema_versions — enriched copy here"
