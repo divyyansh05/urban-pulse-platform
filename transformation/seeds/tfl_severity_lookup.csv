@@ -1,0 +1,22 @@
+severity_code,severity_description,is_disrupted
+0,Special Service,false
+1,Closed,true
+2,Suspended,true
+3,Part Suspended,true
+4,Planned Closure,true
+5,Part Closure,true
+6,Severe Delays,true
+7,Reduced Service,true
+8,Bus Service,true
+9,Minor Delays,true
+10,Good Service,false
+11,Part Closed,true
+12,Exit Only,true
+13,No Step Free Access,true
+14,Change of Frequency,true
+15,Diverted,true
+16,Not Running,true
+17,Issues Reported,true
+18,No Issues,false
+19,Information,false
+20,Service Closed,true
