@@ -1,0 +1,22 @@
+wmo_code,description,category,is_precipitation
+0,Clear sky,Clear,false
+1,Mainly clear,Clear,false
+2,Partly cloudy,Cloudy,false
+3,Overcast,Cloudy,false
+45,Foggy,Fog,false
+48,Depositing rime fog,Fog,false
+51,Light drizzle,Drizzle,true
+53,Moderate drizzle,Drizzle,true
+55,Dense drizzle,Drizzle,true
+61,Slight rain,Rain,true
+63,Moderate rain,Rain,true
+65,Heavy rain,Rain,true
+71,Slight snow,Snow,true
+73,Moderate snow,Snow,true
+75,Heavy snow,Snow,true
+80,Slight rain showers,Rain,true
+81,Moderate rain showers,Rain,true
+82,Violent rain showers,Rain,true
+95,Thunderstorm,Storm,true
+96,Thunderstorm with slight hail,Storm,true
+99,Thunderstorm with heavy hail,Storm,true

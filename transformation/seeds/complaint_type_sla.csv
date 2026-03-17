@@ -1,0 +1,19 @@
+complaint_type,sla_hours,priority_level
+Noise - Residential,8,LOW
+Noise - Commercial,8,LOW
+Noise - Street/Sidewalk,8,LOW
+HEAT/HOT WATER,24,HIGH
+PLUMBING,72,MEDIUM
+Street Condition,10,HIGH
+Water System,24,HIGH
+Sewer,24,HIGH
+Rodent,10,HIGH
+Unsanitary Condition,10,HIGH
+ELEVATOR,8,HIGH
+Illegal Parking,72,LOW
+Blocked Driveway,72,LOW
+Street Light Condition,72,MEDIUM
+Missed Collection (All Materials),24,MEDIUM
+Derelict Vehicle,168,LOW
+Graffiti,168,LOW
+Dirty Conditions,24,LOW

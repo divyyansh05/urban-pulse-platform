@@ -81,6 +81,7 @@ local/duckdb/*.duckdb
 local/minio_config/data/
 *.parquet
 *.csv
+!transformation/seeds/*.csv
 *.avro
 
 # ── Coverage & testing ────────────────────────────────────────────────────────
