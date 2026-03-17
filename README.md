@@ -28,6 +28,14 @@ builds a unified intelligence layer that answers questions no single dataset can
 
 ## Architecture
 
+## Cloud Architecture
+
+![Cloud Architecture](docs/architecture/cloud_architecture.svg)
+
+<details>
+<summary>Detailed data flow diagram</summary>
+
+
 ```mermaid
 flowchart TD
     subgraph SOURCES["📡 DATA SOURCES"]
@@ -186,7 +194,7 @@ flowchart TD
 ```
 
 ---
-
+</details>
 ## Data Sources
 
 | Source | Domain | Volume | Frequency | Format |
