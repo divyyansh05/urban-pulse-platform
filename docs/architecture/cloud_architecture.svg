@@ -1,0 +1,183 @@
+<svg width="100%" viewBox="0 0 680 580" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <style>
+    text { font-family: Arial, sans-serif; fill: #1a1a1a; }
+    .th { font-size: 14px; font-weight: 500; }
+    .ts { font-size: 12px; font-weight: 400; }
+    .arr { stroke: #888780; stroke-width: 1.5; fill: none; }
+
+    /* c-blue */
+    .c-blue rect  { fill: #E6F1FB; stroke: #185FA5; }
+    .c-blue .th   { fill: #0C447C; }
+    .c-blue .ts   { fill: #185FA5; }
+
+    /* c-teal */
+    .c-teal rect  { fill: #E1F5EE; stroke: #0F6E56; }
+    .c-teal .th   { fill: #085041; }
+    .c-teal .ts   { fill: #0F6E56; }
+
+    /* c-amber */
+    .c-amber rect { fill: #FAEEDA; stroke: #854F0B; }
+    .c-amber .th  { fill: #633806; }
+    .c-amber .ts  { fill: #854F0B; }
+
+    /* c-gray */
+    .c-gray rect  { fill: #F1EFE8; stroke: #5F5E5A; }
+    .c-gray .th   { fill: #444441; }
+    .c-gray .ts   { fill: #5F5E5A; }
+
+    /* c-green */
+    .c-green rect { fill: #EAF3DE; stroke: #3B6D11; }
+    .c-green .th  { fill: #27500A; }
+    .c-green .ts  { fill: #3B6D11; }
+
+    /* c-purple */
+    .c-purple rect { fill: #EEEDFE; stroke: #534AB7; }
+    .c-purple .th  { fill: #3C3489; }
+    .c-purple .ts  { fill: #534AB7; }
+
+    .label { font-size: 11px; fill: #888780; }
+  </style>
+</defs>
+
+<!-- Title -->
+<text class="th" x="340" y="28" text-anchor="middle" style="font-size:15px;font-weight:500;fill:#1a1a1a;">Urban Pulse Platform — Cloud Architecture</text>
+
+<!-- Row label: sources -->
+<text class="label" x="340" y="52" text-anchor="middle">data sources</text>
+
+<!-- Sources -->
+<g class="c-blue">
+  <rect x="20" y="60" width="96" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="68" y="78" text-anchor="middle" dominant-baseline="central">NYC 311</text>
+  <text class="ts" x="68" y="94" text-anchor="middle" dominant-baseline="central">20.5M records</text>
+</g>
+<g class="c-blue">
+  <rect x="128" y="60" width="96" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="176" y="78" text-anchor="middle" dominant-baseline="central">NYC Crime</text>
+  <text class="ts" x="176" y="94" text-anchor="middle" dominant-baseline="central">9.5M records</text>
+</g>
+<g class="c-blue">
+  <rect x="236" y="60" width="96" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="284" y="78" text-anchor="middle" dominant-baseline="central">TfL Transit</text>
+  <text class="ts" x="284" y="94" text-anchor="middle" dominant-baseline="central">30s streaming</text>
+</g>
+<g class="c-blue">
+  <rect x="344" y="60" width="96" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="392" y="78" text-anchor="middle" dominant-baseline="central">AirNow EPA</text>
+  <text class="ts" x="392" y="94" text-anchor="middle" dominant-baseline="central">hourly batch</text>
+</g>
+<g class="c-blue">
+  <rect x="452" y="60" width="112" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="508" y="78" text-anchor="middle" dominant-baseline="central">Open-Meteo</text>
+  <text class="ts" x="508" y="94" text-anchor="middle" dominant-baseline="central">hourly, no key</text>
+</g>
+
+<!-- Arrows sources → ingestion -->
+<line x1="68"  y1="104" x2="68"  y2="152" class="arr" marker-end="url(#arrow)"/>
+<line x1="176" y1="104" x2="176" y2="152" class="arr" marker-end="url(#arrow)"/>
+<line x1="284" y1="104" x2="284" y2="152" class="arr" marker-end="url(#arrow)"/>
+<line x1="392" y1="104" x2="392" y2="152" class="arr" marker-end="url(#arrow)"/>
+<line x1="508" y1="104" x2="508" y2="152" class="arr" marker-end="url(#arrow)"/>
+
+<!-- Row label: ingestion -->
+<text class="label" x="340" y="148" text-anchor="middle">ingestion</text>
+
+<!-- Ingestion -->
+<g class="c-teal">
+  <rect x="20" y="156" width="204" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="122" y="174" text-anchor="middle" dominant-baseline="central">Airflow batch ingesters</text>
+  <text class="ts" x="122" y="190" text-anchor="middle" dominant-baseline="central">Python · Pydantic schema check</text>
+</g>
+<g class="c-teal">
+  <rect x="236" y="156" width="204" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="338" y="174" text-anchor="middle" dominant-baseline="central">GCP Pub/Sub + Dataflow</text>
+  <text class="ts" x="338" y="190" text-anchor="middle" dominant-baseline="central">streaming · 30s poll</text>
+</g>
+<g class="c-teal">
+  <rect x="452" y="156" width="212" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="558" y="174" text-anchor="middle" dominant-baseline="central">Schema Registry</text>
+  <text class="ts" x="558" y="190" text-anchor="middle" dominant-baseline="central">evolution detection · alerts</text>
+</g>
+
+<!-- Arrows ingestion → raw -->
+<line x1="122" y1="200" x2="122" y2="244" class="arr" marker-end="url(#arrow)"/>
+<line x1="338" y1="200" x2="338" y2="244" class="arr" marker-end="url(#arrow)"/>
+<line x1="558" y1="200" x2="558" y2="244" class="arr" marker-end="url(#arrow)"/>
+
+<!-- Row label: bronze -->
+<text class="label" x="340" y="240" text-anchor="middle">bronze — raw layer</text>
+
+<!-- Raw -->
+<g class="c-amber">
+  <rect x="20" y="248" width="300" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="170" y="266" text-anchor="middle" dominant-baseline="central">AWS S3 — raw landing zone</text>
+  <text class="ts" x="170" y="282" text-anchor="middle" dominant-baseline="central">nyc/ · london/ · _metadata/ · append-only</text>
+</g>
+<g class="c-amber">
+  <rect x="332" y="248" width="332" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="498" y="266" text-anchor="middle" dominant-baseline="central">BigQuery — raw dataset</text>
+  <text class="ts" x="498" y="282" text-anchor="middle" dominant-baseline="central">8 tables · partitioned by ingestion_date</text>
+</g>
+
+<!-- Arrows raw → silver -->
+<line x1="170" y1="292" x2="170" y2="336" class="arr" marker-end="url(#arrow)"/>
+<line x1="498" y1="292" x2="498" y2="336" class="arr" marker-end="url(#arrow)"/>
+
+<!-- Row label: silver -->
+<text class="label" x="340" y="332" text-anchor="middle">silver — transform layer</text>
+
+<!-- Silver -->
+<g class="c-gray">
+  <rect x="20" y="340" width="300" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="170" y="358" text-anchor="middle" dominant-baseline="central">Databricks (Spark)</text>
+  <text class="ts" x="170" y="374" text-anchor="middle" dominant-baseline="central">batch processing · backfill jobs</text>
+</g>
+<g class="c-gray">
+  <rect x="332" y="340" width="332" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="498" y="358" text-anchor="middle" dominant-baseline="central">dbt on BigQuery</text>
+  <text class="ts" x="498" y="374" text-anchor="middle" dominant-baseline="central">staging · intermediate · snapshots</text>
+</g>
+
+<!-- Arrows silver → gold -->
+<line x1="170" y1="384" x2="170" y2="428" class="arr" marker-end="url(#arrow)"/>
+<line x1="498" y1="384" x2="498" y2="428" class="arr" marker-end="url(#arrow)"/>
+
+<!-- Row label: gold -->
+<text class="label" x="340" y="424" text-anchor="middle">gold — marts layer</text>
+
+<!-- Gold -->
+<g class="c-green">
+  <rect x="20" y="432" width="620" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="330" y="450" text-anchor="middle" dominant-baseline="central">BigQuery — marts dataset</text>
+  <text class="ts" x="330" y="466" text-anchor="middle" dominant-baseline="central">city_daily_summary · complaint_sla · transit_performance · air_quality_trends · cross_domain · ml_features</text>
+</g>
+
+<!-- Arrows gold → serving -->
+<line x1="160" y1="476" x2="120" y2="520" class="arr" marker-end="url(#arrow)"/>
+<line x1="330" y1="476" x2="330" y2="520" class="arr" marker-end="url(#arrow)"/>
+<line x1="500" y1="476" x2="540" y2="520" class="arr" marker-end="url(#arrow)"/>
+
+<!-- Row label: serving -->
+<text class="label" x="340" y="516" text-anchor="middle">serving</text>
+
+<!-- Serving -->
+<g class="c-purple">
+  <rect x="20" y="524" width="188" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="114" y="542" text-anchor="middle" dominant-baseline="central">Tableau dashboards</text>
+  <text class="ts" x="114" y="558" text-anchor="middle" dominant-baseline="central">city intelligence · BI</text>
+</g>
+<g class="c-purple">
+  <rect x="236" y="524" width="188" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="330" y="542" text-anchor="middle" dominant-baseline="central">FastAPI + Cloud Run</text>
+  <text class="ts" x="330" y="558" text-anchor="middle" dominant-baseline="central">REST endpoints</text>
+</g>
+<g class="c-purple">
+  <rect x="452" y="524" width="212" height="44" rx="6" stroke-width="0.5"/>
+  <text class="th" x="558" y="542" text-anchor="middle" dominant-baseline="central">ML model consumer</text>
+  <text class="ts" x="558" y="558" text-anchor="middle" dominant-baseline="central">predictions · feature store</text>
+</g>
+</svg>
